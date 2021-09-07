@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "start": "nodemon main.js",
-    "build": "zip agmarketnet_download.zip chrome-extension/"
+    "prebuild": "rm -rf agmarketnet_download.zip",
+    "build": "cd chrome-extension && zip -r ../agmarketnet_download.zip * && cd ../"
   }
 }
