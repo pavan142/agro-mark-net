@@ -1,0 +1,10 @@
+{
+  "name": "agro-data",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "nodemon main.js",
+    "build": "zip agmarketnet_download.zip chrome-extension/"
+  }
+}

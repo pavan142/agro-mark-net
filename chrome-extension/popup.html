@@ -1,0 +1,79 @@
+<html>
+
+<head>
+    <style>
+        body {
+            width: 280px;
+            margin: 0px;
+        }
+
+        div {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #start_automation {
+            border: none;
+            outline: none;
+            padding: 10px;
+            position: relative;
+            border-radius: 8px;
+            letter-spacing: 0.7px;
+            background-color: #5086bd;
+            color: #fff;
+            font-size: 10px;
+            font-family: "Lato", sans-serif;
+            cursor: pointer;
+            box-shadow: rgba(0, 9, 61, 0.2) 0px 4px 8px 0px;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        #stop_automation {
+            display: none;
+            border: none;
+            outline: none;
+            padding: 8px;
+            position: relative;
+            border-radius: 8px;
+            letter-spacing: 0.7px;
+            background-color: #FF013C;
+            color: #fff;
+            font-size: 10px;
+            font-family: "Lato", sans-serif;
+            cursor: pointer;
+            box-shadow: rgba(0, 9, 61, 0.2) 0px 4px 8px 0px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+        }
+
+        select {
+            background-color: #5086bd;
+            border-radius: 7px;
+            padding: 5px;
+            color: white;
+            border: none;
+            font-size: 15px;
+            box-shadow: 0 3px 15px rgb(0 0 0 / 20%);
+            -webkit-appearance: button;
+            appearance: button;
+            outline: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div>
+        <h2>Select the crop</h2>
+        <select id="crop_selector">
+        </select>
+        <button id="start_automation">Download</button>
+        <button id="stop_automation">Stop</button>
+    </div>
+
+</body>
+<script src="./dist/popup.js"></script>
+
+</html>

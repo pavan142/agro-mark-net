@@ -1,0 +1,7 @@
+{
+    "watch": [
+        "chrome-extension/src/",
+        "main.js"
+    ],
+    "ext": "js, css"
+}
