@@ -155,36 +155,44 @@ async function main() {
     let prevCounter = 0;
 
     for (let cropName of crops) {
-        let fileName = `data/${cropName}.json`;
-        let cropData = {};
-        if (fs.existsSync(fileName)) {
-            cropData = JSON.parse(fs.readFileSync(fileName))
-            console.log("Continuing from previous Download");
-        }
-        let cropCode = cropsToCode[cropName]
-        function backupData() {
-            fs.writeFile(fileName, JSON.stringify(cropData, null, 2), () => { })
+        let folderName = `data/${cropName}`
+        if (!fs.existsSync(folderName))
+            fs.mkdirSync(folderName);
+        let metaDataFile = `data/${cropName}/meta.json`;
+        let metaData = {};
+        if (fs.existsSync(metaDataFile)) {
+            metaData = JSON.parse(fs.readFileSync(metaDataFile));
         }
         for (let stateName of states) {
+            let stateStartTime = Date.now();
             let stateCode = statesToCode[stateName];
-            if (cropData[stateCode] === undefined)
-                cropData[stateCode] = {};
             let markets = stateMarketMap[stateCode]
+            if (metaData[stateCode]) {
+                counter += markets * intervals.length;
+                console.log(`Skipping already downloaded ${cropName}:: ${stateCode}::${stateName}`);
+                process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
+                continue;
+            }
+
+            console.log("Downloading...", stateName)
+
+            let fileName = `data/${cropName}/${cropName}_${stateCode}.json`;
+            let cropData = {};
+            // if (fs.existsSync(fileName)) {
+            //     cropData = JSON.parse(fs.readFileSync(fileName))
+            //     console.log("Continuing from previous Download");
+            // }
+            let cropCode = cropsToCode[cropName]
+            function backupData() {
+                fs.writeFileSync(fileName, JSON.stringify(cropData, null, 2), () => { })
+            }
             for (let market of markets) {
+                let marketStartTime = Date.now();
                 let marketCode = market.code;
                 let marketName = market.name;
-                let check = cropData[stateCode][marketName]
-                if (check && Object.keys(check).length == 0) {
-                    counter += intervals.length;
-                    process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
-                    backupData();
-                    continue;
-                }
-                if (cropData[stateCode][marketName] === undefined)
-                    cropData[stateCode][marketName] = {}
-                // Doing a dry run
                 let from = `01-Jan-${startYear}`;
                 let to = `31-Dec-${endYear}`;
+                let promises = [];
                 let data = await getGranularData({ cropCode, stateCode, marketCode, marketName, from, to })
                 if (data) {
                     // console.log(`${marketName} has some arrival data for ${cropName}`);
@@ -192,38 +200,39 @@ async function main() {
                     // console.log(`${marketName} has no arrivals for ${cropName}`);
                     counter += intervals.length;
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
-                    backupData();
                     continue;
                 }
+                cropData[marketName] = {}
                 for (let interval of intervals) {
                     counter++;
                     ratio = Math.round(counter / totalRequests * 10000) / 100
-                    if ((counter - prevCounter) > 20) {
-                        process.stdout.write("backing up data\r");
-                        backupData();
-                        prevRatio = ratio;
-                        prevCounter = counter;
-                    }
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
                     const { from, to } = interval;
-                    if (cropData[stateCode][marketName][interval.name] != undefined) {
+                    if (cropData[marketName][interval.name] != undefined) {
                         continue;
                     }
-                    let data = await getGranularData({ cropCode, stateCode, marketCode, marketName, from, to })
-                    if (data) {
-                        // console.log("got data");
-                        cropData[stateCode][marketName][interval.name] = Number(data);
-                    } else {
-                        cropData[stateCode][marketName][interval.name] = 0;
-                    }
+                    let p = getGranularData({ cropCode, stateCode, marketCode, marketName, from, to }).then((data) => {
+                        if (data) {
+                            cropData[marketName][interval.name] = Number(data);
+                        }
+                    })
+
+                    promises.push(p);
                     // break;
                 }
+                await Promise.all(promises);
+                backupData();
+                let elapsed = Date.now() - marketStartTime;
+                console.log(`Processed ${cropName}::${stateName}::${marketName} in ${elapsed / 1000} seconds`)
                 // break;
             }
+            let elapsed = Date.now() - stateStartTime;
+            console.log(`Processed ${cropName}::${stateName} in ${elapsed / 1000} seconds`)
+            metaData[stateCode] = "completed"
+            fs.writeFileSync(metaDataFile, JSON.stringify(metaData, null, 2));
             // break;
         }
         // break;
-        backupData();
         process.stdout.write(`Download complete of ${cropName}`)
     }
 }
