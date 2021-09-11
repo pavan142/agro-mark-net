@@ -3,6 +3,7 @@ const cheerio = require("cheerio");
 const axios = require("axios");
 const url = require("url");
 const fs = require("fs");
+const colors = require("colors");
 
 const { siteInfo, cropsToCode, codeToCrops, statesToCode, codeToStates, months } = require("./constants");
 
@@ -99,6 +100,58 @@ async function getGranularData({ cropCode, stateCode, marketCode, marketName, fr
     return value;
 }
 
+async function getCheckSum({ cropCode, stateCode, from, to }) {
+    // console.log("making request");
+    params.set(PARAM_COMMODITY_CODE, cropCode)
+    params.set(PARAM_COMMODITY_NAME, codeToCrops[cropCode])
+    params.set(PARAM_STATE_CODE, stateCode)
+    params.set(PARAM_STATE_NAME, codeToStates[stateCode]);
+    params.set(PARAM_MARKET_NAME, "--Select--");
+    params.set(PARAM_MARKET_CODE, 0)
+    params.set(PARAM_STATE_NAME, "--Select--");
+    params.set(PARAM_STATE_CODE, 0)
+    params.set(PARAM_FromCode, from)
+    params.set(PARAM_FromName, from)
+    params.set(PARAM_ToCode, to)
+    params.set(PARAM_ToName, to)
+    options.params = params;
+    let body = await axios(options)
+    body = body.data;
+    // console.log(params.toString())
+    // console.log("got data");
+    fs.writeFileSync('output_checksum.html', body);
+    let $ = cheerio.load(body);
+    let nodes = $('[id="cphBody_GridArrivalData"] span');
+    let output = {};
+    for (let i = 0; i + 1 < nodes.length;) {
+        let stateName = $(nodes[i]).text()
+        let value = $(nodes[i + 1]).text()
+        value = Number(value);
+        if (stateName == "Total") {
+            output[stateName] = value;
+        } else {
+            output[statesToCode[stateName]] = value;
+        }
+        i = i + 2;
+    }
+    // let value = $(node).text();
+    console.log("got value", output);
+    return output;
+}
+
+function verify(data, target) {
+    let total = 0;
+    for (let market of Object.keys(data)) {
+        let monthData = data[market]
+        for (let month of Object.keys(monthData)) {
+            total += monthData[month]
+        }
+    }
+    let percentChange = Math.abs(100 * ((total - target) / target))
+    // console.log(total, target, percentChange)
+    return (percentChange < 0.01)
+}
+
 async function main() {
     let crops = [
         "Onion",
@@ -155,6 +208,7 @@ async function main() {
     let prevCounter = 0;
 
     for (let cropName of crops) {
+        let cropCode = cropsToCode[cropName]
         let folderName = `data/${cropName}`
         if (!fs.existsSync(folderName))
             fs.mkdirSync(folderName);
@@ -163,26 +217,43 @@ async function main() {
         if (fs.existsSync(metaDataFile)) {
             metaData = JSON.parse(fs.readFileSync(metaDataFile));
         }
+        let checksumDataFile = `data/${cropName}/checksum.json`;
+        let checksumData = {};
+        if (!fs.existsSync(checksumDataFile)) {
+            console.log("Fetching checksum data")
+            checksumData = await getCheckSum({ cropCode, from: intervals[0].from, to: intervals[intervals.length - 1].to })
+            console.log("Fetched checksum data", checksumData)
+            fs.writeFileSync(checksumDataFile, JSON.stringify(checksumData, null, 2))
+        } else {
+            checksumData = JSON.parse(fs.readFileSync(checksumDataFile));
+        }
         for (let stateName of states) {
             let stateStartTime = Date.now();
             let stateCode = statesToCode[stateName];
-            let markets = stateMarketMap[stateCode]
+            let markets = stateMarketMap[stateCode];
+            let fileName = `data/${cropName}/${cropName}_${stateCode}.json`;
             if (metaData[stateCode]) {
-                counter += markets * intervals.length;
-                console.log(`Skipping already downloaded ${cropName}:: ${stateCode}::${stateName}`);
-                process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
+                counter += markets.length * intervals.length;
+                if (fs.existsSync(fileName)) {
+                    console.log(colors.yellow(`Verifiying ${cropName} ${stateCode}`));
+                    let status = verify(JSON.parse(fs.readFileSync(fileName)), checksumData[stateCode]);
+                    if (status) {
+                        console.log(colors.green(`Success`))
+                    } else {
+                        console.log(colors.red(`Failed`))
+                    }
+                    console.log(colors.yellow(`Skipping already downloaded Date for ${cropName} ${stateCode}\n`));
+                }
                 continue;
             }
-
+            // continue;
             console.log("Downloading...", stateName)
 
-            let fileName = `data/${cropName}/${cropName}_${stateCode}.json`;
             let cropData = {};
             // if (fs.existsSync(fileName)) {
             //     cropData = JSON.parse(fs.readFileSync(fileName))
             //     console.log("Continuing from previous Download");
             // }
-            let cropCode = cropsToCode[cropName]
             function backupData() {
                 fs.writeFileSync(fileName, JSON.stringify(cropData, null, 2), () => { })
             }
