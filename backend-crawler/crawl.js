@@ -152,6 +152,51 @@ function verify(data, target) {
     return (percentChange < 0.01)
 }
 
+async function preFlightCheck({ cropCode, stateCode, marketCode, marketName, fromYear, toYear }) {
+    let allowedYears = {};
+    params.set(PARAM_COMMODITY_CODE, cropCode)
+    params.set(PARAM_COMMODITY_NAME, codeToCrops[cropCode])
+    params.set(PARAM_STATE_CODE, stateCode)
+    params.set(PARAM_STATE_NAME, codeToStates[stateCode]);
+    params.set(PARAM_MARKET_NAME, marketName);
+    params.set(PARAM_MARKET_CODE, marketCode)
+    params.set(PARAM_FromCode, `01-Jan-${fromYear}`)
+    params.set(PARAM_FromName, `01-Jan-${fromYear}`)
+    params.set(PARAM_ToCode, `31-Dec-${toYear}`)
+    params.set(PARAM_ToName, `31-Dec-${toYear}`)
+    options.params = params;
+    let body = await axios(options)
+    body = body.data;
+    let $ = cheerio.load(body);
+    let node = $('[id="cphBody_GridArrivalData_lblarrival_std_unit_0"]');
+    let value = $(node).text();
+    if (value == "")
+        return allowedYears;
+
+    let promises = [];
+    for (let year = fromYear; year <= toYear; year++) {
+        params.set(PARAM_FromCode, `01-Jan-${year}`)
+        params.set(PARAM_FromName, `01-Jan-${year}`)
+        params.set(PARAM_ToCode, `31-Dec-${year}`)
+        params.set(PARAM_ToName, `31-Dec-${year}`)
+        options.params = params;
+
+        let p = axios(options)
+        p.then((body) => {
+            body = body.data;
+            let $ = cheerio.load(body);
+            let node = $('[id="cphBody_GridArrivalData_lblarrival_std_unit_0"]');
+            let value = $(node).text();
+            if (value != "") {
+                allowedYears[year] = true;
+            }
+        })
+        promises.push(p);
+    }
+    await Promise.all(promises);
+    return allowedYears;
+}
+
 async function main() {
     let crops = [
         "Onion",
@@ -182,7 +227,8 @@ async function main() {
             intervals.push({
                 "name": `${name}-${year % 100}`,
                 "from": `01-${name}-${year}`,
-                "to": `${lastDate}-${name}-${year}`
+                "to": `${lastDate}-${name}-${year}`,
+                year,
             })
         }
     }
@@ -210,13 +256,18 @@ async function main() {
     for (let cropName of crops) {
         let cropCode = cropsToCode[cropName]
         let folderName = `data/${cropName}`
+
         if (!fs.existsSync(folderName))
             fs.mkdirSync(folderName);
+
+        // GETTING META DATA
         let metaDataFile = `data/${cropName}/meta.json`;
         let metaData = {};
         if (fs.existsSync(metaDataFile)) {
             metaData = JSON.parse(fs.readFileSync(metaDataFile));
         }
+
+        // GETTING CHECKSUM DATA
         let checksumDataFile = `data/${cropName}/checksum.json`;
         let checksumData = {};
         if (!fs.existsSync(checksumDataFile)) {
@@ -227,11 +278,15 @@ async function main() {
         } else {
             checksumData = JSON.parse(fs.readFileSync(checksumDataFile));
         }
+
+
         for (let stateName of states) {
             let stateStartTime = Date.now();
             let stateCode = statesToCode[stateName];
             let markets = stateMarketMap[stateCode];
             let fileName = `data/${cropName}/${cropName}_${stateCode}.json`;
+
+            // CHECKING AND SKIPPING ALREADY DOWNLOADED DATA
             if (metaData[stateCode]) {
                 counter += markets.length * intervals.length;
                 if (fs.existsSync(fileName)) {
@@ -264,11 +319,10 @@ async function main() {
                 let from = `01-Jan-${startYear}`;
                 let to = `31-Dec-${endYear}`;
                 let promises = [];
-                let data = await getGranularData({ cropCode, stateCode, marketCode, marketName, from, to })
-                if (data) {
-                    // console.log(`${marketName} has some arrival data for ${cropName}`);
-                } else {
-                    // console.log(`${marketName} has no arrivals for ${cropName}`);
+
+                let allowedYears = await preFlightCheck({ cropCode, stateCode, marketCode, marketName, fromYear: startYear, toYear: endYear })
+                // console.log(`${marketName}`, allowedYears);
+                if (!Object.keys(allowedYears).length) {
                     counter += intervals.length;
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
                     continue;
@@ -278,8 +332,8 @@ async function main() {
                     counter++;
                     ratio = Math.round(counter / totalRequests * 10000) / 100
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
-                    const { from, to } = interval;
-                    if (cropData[marketName][interval.name] != undefined) {
+                    const { from, to, year } = interval;
+                    if (!allowedYears[year] || cropData[marketName][interval.name] != undefined) {
                         continue;
                     }
                     let p = getGranularData({ cropCode, stateCode, marketCode, marketName, from, to }).then((data) => {
