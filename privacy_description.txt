@@ -1,0 +1,2 @@
+tabs justification: To send messages from background script to content script
+downloads justification: To set the name of excel file that is downloaded from the website

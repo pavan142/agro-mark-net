@@ -387,6 +387,21 @@ const StatesToCode = {
     "West Bengal": "WB"
 }
 
+const months = {
+    "Jan": () => 31,
+    "Feb": (year) => year%4? 28: 29,
+    "Mar": () => 31,
+    "Apr": () => 30,
+    "May": () => 31,
+    "Jun": () => 30,
+    "Jul": () => 31,
+    "Aug": () => 31,
+    "Sep": () => 30,
+    "Oct": () => 31,
+    "Nov": () => 30,
+    "Dec": () => 31
+}
+
 function makeReverseMap(obj) {
     let output = {};
     for (let key of Object.keys(obj)) {
@@ -748,6 +763,8 @@ async function stopAutomation() {
     PromiseMap.downloads.clear();
     CURRENT_STATE = "";
     CURRENT_CROP = "";
+    CURRENT_MONTH = "";
+    CURRENT_YEAR = "";
     CONTINUE = false;
 }
 

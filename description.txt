@@ -1,0 +1,2 @@
+This extension helps you download the crop data in Excel format from the website https://agmarknet.gov.in/ of all states from the time period 01 Jan 2010 to 31 Dec 2020.
+Select the crop you want to download and and the extension will start saving Excel files of Arrival Data of the states for that crop.
