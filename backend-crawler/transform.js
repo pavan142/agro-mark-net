@@ -2,11 +2,9 @@ const fs = require("fs");
 const { Parser } = require("json2csv");
 
 const { siteInfo, cropsToCode, codeToCrops, statesToCode, codeToStates, months } = require("./constants");
-let stateCode = process.argv[3];
 let cropName = process.argv[2];
-stateCode = stateCode ? stateCode : "GJ"
 cropName = cropName ? cropName : "Onion"
-let fileBaseName = `data/${cropName}/${cropName}_${stateCode}`
+let fileBaseName = `data/${cropName}/${cropName}`
 let jsonFile = `${fileBaseName}.json`
 let csvFile = `${fileBaseName}.csv`
 
@@ -104,14 +102,13 @@ function toCSV() {
     }
     const parser = new Parser();
     const csv = parser.parse(CSVData);
-    let csvFile = `${cropName}_combined.csv`
     fs.writeFileSync(csvFile, csv);
 }
 
 function main() {
     PrefillZeros()
     Populate();
-    fs.writeFileSync(`${cropName}_combined.json`, JSON.stringify(globaData, null, 2))
+    fs.writeFileSync(jsonFile, JSON.stringify(globaData, null, 2))
     toCSV()
 }
 
