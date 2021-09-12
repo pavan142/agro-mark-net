@@ -36,6 +36,12 @@ const params = new url.URLSearchParams({
     [PARAM_DISTRICT_NAME]: "--Select--"
 });
 
+const META_STATUS_KEY = "__STATUS"
+const META_TIME_KEY = "__TIME"
+const META_STATUSES = {
+    COMPLETED: 'completed'
+}
+
 const options = {
     method: 'get',
     url: siteInfo.base_url,
@@ -148,7 +154,7 @@ function verify(data, target) {
         }
     }
     let percentChange = Math.abs(100 * ((total - target) / target))
-    // console.log(total, target, percentChange)
+    console.log(total, target, percentChange)
     return (percentChange < 0.01)
 }
 
@@ -279,15 +285,15 @@ async function main() {
             checksumData = JSON.parse(fs.readFileSync(checksumDataFile));
         }
 
-
         for (let stateName of states) {
             let stateStartTime = Date.now();
             let stateCode = statesToCode[stateName];
             let markets = stateMarketMap[stateCode];
             let fileName = `data/${cropName}/${cropName}_${stateCode}.json`;
+            let statePromises = [];
 
             // CHECKING AND SKIPPING ALREADY DOWNLOADED DATA
-            if (metaData[stateCode]) {
+            if (metaData[stateCode] && metaData[stateCode][META_STATUS_KEY] === META_STATUSES.COMPLETED) {
                 counter += markets.length * intervals.length;
                 if (fs.existsSync(fileName)) {
                     console.log(colors.yellow(`Verifiying ${cropName} ${stateCode}`));
@@ -301,16 +307,22 @@ async function main() {
                 }
                 continue;
             }
+
+            if (!metaData[stateCode])
+                metaData[stateCode] = {};
             // continue;
             console.log("Downloading...", stateName)
 
             let cropData = {};
-            // if (fs.existsSync(fileName)) {
-            //     cropData = JSON.parse(fs.readFileSync(fileName))
-            //     console.log("Continuing from previous Download");
-            // }
+            if (fs.existsSync(fileName)) {
+                cropData = JSON.parse(fs.readFileSync(fileName))
+            }
+
             function backupData() {
-                fs.writeFileSync(fileName, JSON.stringify(cropData, null, 2), () => { })
+                fs.writeFile(fileName, JSON.stringify(cropData, null, 2), () => { })
+            }
+            function backupMeta() {
+                fs.writeFile(metaDataFile, JSON.stringify(metaData, null, 2), () => { })
             }
             for (let market of markets) {
                 let marketStartTime = Date.now();
@@ -318,13 +330,21 @@ async function main() {
                 let marketName = market.name;
                 let from = `01-Jan-${startYear}`;
                 let to = `31-Dec-${endYear}`;
-                let promises = [];
+                let marketPromises = [];
+
+                if (metaData[stateCode][marketName] != undefined) {
+                    counter += intervals.length;
+                    console.log(colors.yellow(`Skipping already downloaded data for ${cropName} ${stateCode} ${marketName}\n`));
+                    continue;
+                }
 
                 let allowedYears = await preFlightCheck({ cropCode, stateCode, marketCode, marketName, fromYear: startYear, toYear: endYear })
                 // console.log(`${marketName}`, allowedYears);
                 if (!Object.keys(allowedYears).length) {
                     counter += intervals.length;
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
+                    metaData[stateCode][marketName] = 0;
+                    backupMeta()
                     continue;
                 }
                 cropData[marketName] = {}
@@ -333,6 +353,7 @@ async function main() {
                     ratio = Math.round(counter / totalRequests * 10000) / 100
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
                     const { from, to, year } = interval;
+
                     if (!allowedYears[year] || cropData[marketName][interval.name] != undefined) {
                         continue;
                     }
@@ -342,19 +363,29 @@ async function main() {
                         }
                     })
 
-                    promises.push(p);
+                    marketPromises.push(p);
                     // break;
                 }
-                await Promise.all(promises);
-                backupData();
-                let elapsed = Date.now() - marketStartTime;
-                console.log(`Processed ${cropName}::${stateName}::${marketName} in ${elapsed / 1000} seconds`)
+                let mp = Promise.all(marketPromises);
+                mp.then(() => {
+                    let elapsed = Date.now() - marketStartTime;
+                    metaData[stateCode][marketName] = elapsed / 1000;
+                    backupData();
+                    backupMeta();
+                    console.log(`Processed ${cropName}::${stateName}::${marketName} in ${elapsed / 1000} seconds`)
+                })
+                statePromises.push(mp);
                 // break;
             }
+
+            await Promise.all(statePromises);
             let elapsed = Date.now() - stateStartTime;
-            console.log(`Processed ${cropName}::${stateName} in ${elapsed / 1000} seconds`)
-            metaData[stateCode] = "completed"
-            fs.writeFileSync(metaDataFile, JSON.stringify(metaData, null, 2));
+            console.log(`Processed ${cropName}::${stateName} in ${elapsed / 1000} seconds`);
+            metaData[stateCode] = {
+                [META_STATUS_KEY]: META_STATUSES.COMPLETED,
+                [META_TIME_KEY]: elapsed / 1000
+            }
+            backupMeta();
             // break;
         }
         // break;
