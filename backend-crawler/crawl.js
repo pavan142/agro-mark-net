@@ -205,14 +205,10 @@ async function preFlightCheck({ cropCode, stateCode, marketCode, marketName, fro
 
 async function main() {
     let crops = [
-        "Onion",
-    ]
-    let states = [
-        "Andhra Pradesh",
-        "Arunachal Pradesh"
+        "Banana",
     ]
 
-    states = Object.keys(statesToCode);
+    let states = Object.keys(statesToCode);
 
     let startYear = 2010;
     let endYear = 2020;
@@ -342,6 +338,7 @@ async function main() {
                 // console.log(`${marketName}`, allowedYears);
                 if (!Object.keys(allowedYears).length) {
                     counter += intervals.length;
+                    ratio = Math.round(counter / totalRequests * 10000) / 100
                     process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
                     metaData[stateCode][marketName] = 0;
                     backupMeta()

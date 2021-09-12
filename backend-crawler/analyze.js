@@ -1,7 +1,9 @@
 const fs = require("fs");
-let stateCode = process.argv[2];
+let stateCode = process.argv[3];
+let cropName = process.argv[2];
 stateCode = stateCode ? stateCode : "GJ"
-const data = JSON.parse(fs.readFileSync("./data/Onion/Onion_" + stateCode + ".json"))
+cropName = cropName ? cropName: "Onion"
+const data = JSON.parse(fs.readFileSync(`./data/${cropName}/${cropName}_${stateCode}.json`))
 
 let markets = Object.keys(data)
 let totalRequests = markets.length * 132;
