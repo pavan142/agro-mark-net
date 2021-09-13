@@ -204,10 +204,13 @@ async function preFlightCheck({ cropCode, stateCode, marketCode, marketName, fro
 }
 
 async function main() {
-    let crops = [
-        "Banana",
-    ]
-
+    let crops = process.argv.slice(2)
+    if (!crops.length) {
+        console.log("Please provide the crops you want to download".red);
+        console.log("If you want to download Onion data, run 'node crawl.js Onion'".yellow)
+        console.log("If you want to download Onion and Potato data, run 'node crawl.js Onion Potato'".yellow)
+        return;
+    }
     let states = Object.keys(statesToCode);
 
     let startYear = 2010;
@@ -235,10 +238,8 @@ async function main() {
         }
     }
 
-    // console.log(intervals);
-
-    let totalRequests = 0;
     for (let cropName of crops) {
+        let totalRequests = 0;
         for (let stateName of states) {
             let stateCode = statesToCode[stateName];
             let markets = stateMarketMap[stateCode]
@@ -248,17 +249,11 @@ async function main() {
                 }
             }
         }
-    }
-    console.log("Total trips to the server", totalRequests);
-    let counter = 0;
-    let ratio = 0;
-    let prevRatio = 0;
-    let prevCounter = 0;
-
-    for (let cropName of crops) {
         let cropCode = cropsToCode[cropName]
         let folderName = `data/${cropName}`
-
+        let counter = 0;
+        let ratio = 0;
+        console.log(cropName, "Total network trips to the server", totalRequests);
         if (!fs.existsSync(folderName))
             fs.mkdirSync(folderName);
 
@@ -273,9 +268,9 @@ async function main() {
         let checksumDataFile = `data/${cropName}/checksum.json`;
         let checksumData = {};
         if (!fs.existsSync(checksumDataFile)) {
-            console.log("Fetching checksum data")
+            console.log(cropName, "Fetching checksum data")
             checksumData = await getCheckSum({ cropCode, from: intervals[0].from, to: intervals[intervals.length - 1].to })
-            console.log("Fetched checksum data", checksumData)
+            console.log(cropName, "Fetched checksum data", checksumData)
             fs.writeFileSync(checksumDataFile, JSON.stringify(checksumData, null, 2))
         } else {
             checksumData = JSON.parse(fs.readFileSync(checksumDataFile));
@@ -339,7 +334,7 @@ async function main() {
                 if (!Object.keys(allowedYears).length) {
                     counter += intervals.length;
                     ratio = Math.round(counter / totalRequests * 10000) / 100
-                    process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
+                    process.stdout.write(`Downloading...${cropName} data for ${counter}/${totalRequests}:: ${ratio} \r`)
                     metaData[stateCode][marketName] = 0;
                     backupMeta()
                     continue;
@@ -348,7 +343,7 @@ async function main() {
                 for (let interval of intervals) {
                     counter++;
                     ratio = Math.round(counter / totalRequests * 10000) / 100
-                    process.stdout.write(`Downloading... ${counter}/${totalRequests}:: ${ratio} \r`)
+                    process.stdout.write(`Downloading... ${cropName} data for ${counter}/${totalRequests}:: ${ratio} \r`)
                     const { from, to, year } = interval;
 
                     if (!allowedYears[year] || cropData[marketName][interval.name] != undefined) {
@@ -386,7 +381,10 @@ async function main() {
             // break;
         }
         // break;
-        process.stdout.write(`Download complete of ${cropName}`)
+        process.stdout.write(`Download complete of ${cropName}\n`.green)
+        console.log("------------------------------------------------")
+        console.log("------------------------------------------------")
+        console.log("------------------------------------------------")
     }
 }
 
